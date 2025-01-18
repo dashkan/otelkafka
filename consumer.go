@@ -3,12 +3,13 @@ package otelkafka
 import (
 	"context"
 	"fmt"
-	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
-	"go.opentelemetry.io/otel/attribute"
-	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
-	"go.opentelemetry.io/otel/trace"
 	"strconv"
 	"time"
+
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
+	"go.opentelemetry.io/otel/attribute"
+	semconv "go.opentelemetry.io/otel/semconv/v1.27.0"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Consumer struct {
@@ -92,8 +93,8 @@ func (c *Consumer) startSpan(msg *kafka.Message) trace.Span {
 	attrs := []attribute.KeyValue{
 		semconv.MessagingOperationTypeReceive,
 		semconv.MessagingSystemKafka,
-		semconv.MessagingKafkaMessageOffset(int(msg.TopicPartition.Offset)),
-		semconv.MessagingKafkaConsumerGroup(c.cfg.consumerGroupID),
+		semconv.MessagingKafkaOffset(int(msg.TopicPartition.Offset)),
+		semconv.MessagingConsumerGroupName(c.cfg.consumerGroupID),
 		semconv.MessagingKafkaMessageKey(string(msg.Key)),
 
 		semconv.ServerAddress(c.cfg.bootstrapServers),
