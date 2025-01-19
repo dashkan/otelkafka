@@ -34,3 +34,8 @@ func InitTracer(serviceName string) (*sdktrace.TracerProvider, error) {
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}))
 	return tp, nil
 }
+
+func InitMeterProvider() {
+	// sdtout meter provider
+
+}

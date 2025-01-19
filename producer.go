@@ -29,7 +29,8 @@ func NewProducer(conf *kafka.ConfigMap, opts ...Option) (*Producer, error) {
 	cfg := newConfig(opts...)
 
 	// Create the counter metric
-	meter := cfg.MeterProvider.Meter("kafka")
+	meter := cfg.MeterProvider.Meter("kafka_producer")
+	// Stability: experimental https://opentelemetry.io/docs/specs/semconv/messaging/messaging-metrics/#metric-messagingclientsentmessages
 	msgCounter, err := meter.Int64Counter(
 		"messaging.client.sent.messages",
 		metric.WithDescription("Number of messages producer attempted to send to the broker"),
@@ -49,21 +50,21 @@ func (p *Producer) Produce(msg *kafka.Message, deliveryChan chan kafka.Event) er
 	ctx := p.cfg.Propagators.Extract(context.Background(), carrier)
 
 	lowCardinalityAttrs := []attribute.KeyValue{
+		semconv.MessagingOperationName("produce"),
 		semconv.MessagingOperationTypePublish,
 		semconv.MessagingSystemKafka,
 		semconv.ServerAddress(p.cfg.bootstrapServers),
 		semconv.MessagingDestinationName(*msg.TopicPartition.Topic),
-		semconv.MessagingOperationName("produce"),
 	}
 
 	highCardinalityAttrs := []attribute.KeyValue{
 		semconv.MessagingKafkaMessageKey(string(msg.Key)),
 		semconv.MessagingMessageBodySize(getMsgSize(msg)),
 	}
-	allAttrs := append(lowCardinalityAttrs, highCardinalityAttrs...)
+	attrs := append(lowCardinalityAttrs, highCardinalityAttrs...)
 
 	opts := []trace.SpanStartOption{
-		trace.WithAttributes(allAttrs...),
+		trace.WithAttributes(attrs...),
 		trace.WithSpanKind(trace.SpanKindProducer),
 	}
 
@@ -81,6 +82,7 @@ func (p *Producer) Produce(msg *kafka.Message, deliveryChan chan kafka.Event) er
 				if err := resMsg.TopicPartition.Error; err != nil {
 					span.RecordError(resMsg.TopicPartition.Error)
 					span.SetStatus(codes.Error, err.Error())
+					lowCardinalityAttrs = append(lowCardinalityAttrs, semconv.ErrorTypeKey.String("partition_error"))
 				} else {
 					if resMsg.TopicPartition.Partition >= 0 {
 						partitionIDAttr := semconv.MessagingDestinationPartitionID(fmt.Sprintf("%d", resMsg.TopicPartition.Partition))
@@ -99,9 +101,13 @@ func (p *Producer) Produce(msg *kafka.Message, deliveryChan chan kafka.Event) er
 	}
 
 	err := p.Producer.Produce(msg, deliveryChan)
-	// with no delivery channel or enqueue error, finish immediately
-	if err != nil || deliveryChan == nil {
+	if err != nil {
 		span.RecordError(err)
+	}
+
+	// with no delivery channel or enqueue error, finish immediately
+	if deliveryChan == nil {
+		p.msgCounter.Add(ctx, 1, metric.WithAttributes(lowCardinalityAttrs...))
 		span.End()
 	}
 

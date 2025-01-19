@@ -84,8 +84,8 @@ func main() {
 
 Table below lists the metrics that are collected by the instrumentation. 
 
-| Name | Description |
-|------|-------------|
-| `messaging.client.sent.messages` | The total number of messages sent by the producer. |
-| `messaging.client.receive.messages` | The total number of messages received by the consumer. |
+| Name | Description | Type | Attributes |
+|------|-------------|------|------------|
+| `messaging.client.sent.messages` | The total number of messages sent by the producer. | Counter | `messaging.system`, `messaging.system.operation.name`, `messaging.destination.name` |
+| `messaging.client.receive.messages` | The total number of messages received by the consumer. | Counter | `messaging.system` |
 
