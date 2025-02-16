@@ -82,10 +82,10 @@ func main() {
 
 ## Metrics list
 
-Table below lists the metrics that are collected by the instrumentation. 
+Table below lists the metrics that are collected by the instrumentation, and can exported using [Otel Metric Exporter](https://opentelemetry.io/docs/languages/go/exporters) 
 
 | Name | Description | Type | Attributes |
 |------|-------------|------|------------|
 | `messaging.client.sent.messages` | The total number of messages sent by the producer. | Counter | [more attributes](https://opentelemetry.io/docs/specs/semconv/messaging/messaging-metrics/#metric-messagingclientsentmessages) |
 | `messaging.client.consumed.messages` | The total number of messages received by the consumer. | Counter | [more attributes](https://opentelemetry.io/docs/specs/semconv/messaging/messaging-metrics/#metric-messagingclientconsumedmessages) |
-| `messaging.client.operation.duration` | The duration of the messaging operation initiated by a producer or consumer client. filtered **by `messaging.system.operation.name` | Histogram | [more attributes](https://opentelemetry.io/docs/specs/semconv/messaging/messaging-metrics/#metric-messagingclientoperationduration) |
+| `messaging.client.operation.duration` | The duration of the messaging operation initiated by a producer or consumer client. filtered by `messaging.system.operation.name` | Histogram | [more attributes](https://opentelemetry.io/docs/specs/semconv/messaging/messaging-metrics/#metric-messagingclientoperationduration) |
