@@ -6,7 +6,7 @@ Open Telemetry instrumentation for [confluent-kafka-go](https://github.com/confl
 ## Installation
 
 ```shell
-go get -u github.com/otelkafka/otelkafka
+go get -u github.com/jurabek/otelkafka
 ```
 
 ## Usage
