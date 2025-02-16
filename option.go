@@ -31,6 +31,7 @@ func newConfig(opts ...Option) config {
 	cfg := config{
 		Propagators:    otel.GetTextMapPropagator(),
 		TracerProvider: otel.GetTracerProvider(),
+		MeterProvider:  otel.GetMeterProvider(),
 	}
 	for _, opt := range opts {
 		opt.apply(&cfg)

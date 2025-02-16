@@ -42,18 +42,21 @@ services:
   consumer:
     build:
         context: .
-        dockerfile: consumer.Dockerfile
+        dockerfile: example/consumer.Dockerfile
     environment:
         KAFKA_SERVER: broker:29092
         KAFKA_TOPIC: test-topic
-
+    ports:
+      - "2223:2223" # metrics
   producer:
     build:
         context: .
-        dockerfile: producer.Dockerfile
+        dockerfile: example/producer.Dockerfile
     environment:
         KAFKA_SERVER: broker:29092
         KAFKA_TOPIC: test-topic
+    ports:
+      - "2224:2224" # metrics
 
   jaeger:
     image: jaegertracing/all-in-one:1.60
@@ -64,7 +67,7 @@ services:
       - "6831:6831/udp"
       - "6832:6832/udp"
       - "5778:5778"
-      - "16686:16686"
+      - "16686:16686" # jaeger ui
       - "4317:4317"
       - "4318:4318"
       - "14250:14250"
@@ -79,7 +82,7 @@ services:
     ports:
       - "9090:9090"
     volumes: 
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./example/prometheus.yml:/etc/prometheus/prometheus.yml
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
     restart: unless-stopped

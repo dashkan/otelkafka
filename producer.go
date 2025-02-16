@@ -3,6 +3,7 @@ package otelkafka
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"go.opentelemetry.io/otel/attribute"
@@ -15,8 +16,9 @@ import (
 // Producer supports only tracing mechanism for Produce method over deprecated ProduceChannel method
 type Producer struct {
 	*kafka.Producer
-	cfg        config
-	msgCounter metric.Int64Counter
+	cfg                         config
+	msgCounter                  metric.Int64Counter
+	clientOperationDurHistogram metric.Float64Histogram
 }
 
 func NewProducer(conf *kafka.ConfigMap, opts ...Option) (*Producer, error) {
@@ -27,9 +29,8 @@ func NewProducer(conf *kafka.ConfigMap, opts ...Option) (*Producer, error) {
 
 	opts = append(opts, withConfig(conf))
 	cfg := newConfig(opts...)
-
-	// Create the counter metric
 	meter := cfg.MeterProvider.Meter("kafka_producer")
+
 	// Stability: experimental https://opentelemetry.io/docs/specs/semconv/messaging/messaging-metrics/#metric-messagingclientsentmessages
 	msgCounter, err := meter.Int64Counter(
 		"messaging.client.sent.messages",
@@ -40,7 +41,18 @@ func NewProducer(conf *kafka.ConfigMap, opts ...Option) (*Producer, error) {
 		return nil, fmt.Errorf("failed to create produced message counter metric: %w", err)
 	}
 
-	return &Producer{Producer: p, cfg: cfg, msgCounter: msgCounter}, nil
+	// Stability: experimental https://opentelemetry.io/docs/specs/semconv/messaging/messaging-metrics/#metric-messagingclientoperationduration
+	clientOperationDurHistogram, err := meter.Float64Histogram(
+		"messaging.client.operation.duration",
+		metric.WithDescription("Duration of messaging operation initiated by a producer or consumer client."),
+		metric.WithUnit("s"),
+		metric.WithExplicitBucketBoundaries(0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create client.operation.duration: %w", err)
+	}
+
+	return &Producer{Producer: p, cfg: cfg, msgCounter: msgCounter, clientOperationDurHistogram: clientOperationDurHistogram}, nil
 }
 
 // Produce calls the underlying Producer.Produce and traces the request.
@@ -48,6 +60,7 @@ func (p *Producer) Produce(msg *kafka.Message, deliveryChan chan kafka.Event) er
 	// If there's a span context in the message, use that as the parent context.
 	carrier := NewMessageCarrier(msg)
 	ctx := p.cfg.Propagators.Extract(context.Background(), carrier)
+	start := time.Now()
 
 	lowCardinalityAttrs := []attribute.KeyValue{
 		semconv.MessagingOperationName("produce"),
@@ -82,7 +95,8 @@ func (p *Producer) Produce(msg *kafka.Message, deliveryChan chan kafka.Event) er
 				if err := resMsg.TopicPartition.Error; err != nil {
 					span.RecordError(resMsg.TopicPartition.Error)
 					span.SetStatus(codes.Error, err.Error())
-					lowCardinalityAttrs = append(lowCardinalityAttrs, semconv.ErrorTypeKey.String("partition_error"))
+					span.SetAttributes(semconv.ErrorTypeKey.String("publish_error"))
+					lowCardinalityAttrs = append(lowCardinalityAttrs, semconv.ErrorTypeKey.String("publish_error"))
 				} else {
 					if resMsg.TopicPartition.Partition >= 0 {
 						partitionIDAttr := semconv.MessagingDestinationPartitionID(fmt.Sprintf("%d", resMsg.TopicPartition.Partition))
@@ -95,6 +109,7 @@ func (p *Producer) Produce(msg *kafka.Message, deliveryChan chan kafka.Event) er
 				}
 			}
 			p.msgCounter.Add(ctx, 1, metric.WithAttributes(lowCardinalityAttrs...))
+			p.clientOperationDurHistogram.Record(ctx, time.Since(start).Seconds(), metric.WithAttributes(lowCardinalityAttrs...))
 			span.End()
 			oldDeliveryChan <- evt
 		}()
@@ -108,6 +123,7 @@ func (p *Producer) Produce(msg *kafka.Message, deliveryChan chan kafka.Event) er
 	// with no delivery channel or enqueue error, finish immediately
 	if deliveryChan == nil {
 		p.msgCounter.Add(ctx, 1, metric.WithAttributes(lowCardinalityAttrs...))
+		p.clientOperationDurHistogram.Record(ctx, time.Since(start).Seconds(), metric.WithAttributes(lowCardinalityAttrs...))
 		span.End()
 	}
 
