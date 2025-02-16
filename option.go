@@ -1,19 +1,23 @@
 package otelkafka
 
 import (
+	"net"
+	"strings"
+
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
-	"net"
-	"strings"
 )
 
 const defaultTracerName = "go.opentelemetry.io/contrib/instrumentation/github.com/confluentinc/confluent-kafka-go/otelkafka"
 
 type config struct {
-	TracerProvider   trace.TracerProvider
+	TracerProvider trace.TracerProvider
+	MeterProvider  metric.MeterProvider
+
 	Propagators      propagation.TextMapPropagator
 	Tracer           trace.Tracer
 	consumerGroupID  string
@@ -27,6 +31,7 @@ func newConfig(opts ...Option) config {
 	cfg := config{
 		Propagators:    otel.GetTextMapPropagator(),
 		TracerProvider: otel.GetTracerProvider(),
+		MeterProvider:  otel.GetMeterProvider(),
 	}
 	for _, opt := range opts {
 		opt.apply(&cfg)
@@ -57,6 +62,14 @@ func WithTracerProvider(provider trace.TracerProvider) Option {
 	return optionFunc(func(cfg *config) {
 		if provider != nil {
 			cfg.TracerProvider = provider
+		}
+	})
+}
+
+func WithMeterProvider(meterProvider metric.MeterProvider) Option {
+	return optionFunc(func(cfg *config) {
+		if meterProvider != nil {
+			cfg.MeterProvider = meterProvider
 		}
 	})
 }

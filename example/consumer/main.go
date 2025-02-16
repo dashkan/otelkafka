@@ -3,12 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/jurabek/otelkafka"
 	"github.com/jurabek/otelkafka/example"
-	"log"
-	"os"
-	"os/signal"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -25,6 +28,16 @@ func main() {
 	defer func() {
 		if err := tp.Shutdown(context.Background()); err != nil {
 			log.Printf("Error shutting down tracer provider: %v", err)
+		}
+	}()
+
+	mp, err := example.InitMeterProvider("consumer-app")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		if err := mp.Shutdown(context.Background()); err != nil {
+			log.Printf("Error shutting down meter provider: %v", err)
 		}
 	}()
 
@@ -47,9 +60,11 @@ func main() {
 	}
 	fmt.Println("Subscribed to myTopic")
 
+	go serveMetrics()
+
 	// consume messages
 	run := true
-	for run == true {
+	for run {
 		select {
 		case sig := <-signals:
 			fmt.Printf("Caught signal %v: terminating\n", sig)
@@ -77,4 +92,14 @@ func main() {
 
 	fmt.Println("Closing consumer")
 	consumer.Close()
+}
+
+func serveMetrics() {
+	log.Printf("serving metrics at localhost:2223/metrics")
+	http.Handle("/metrics", promhttp.Handler())
+	err := http.ListenAndServe(":2223", nil) //nolint:gosec // Ignoring G114: Use of net/http serve function that has no support for setting timeouts.
+	if err != nil {
+		fmt.Printf("error serving http: %v", err)
+		return
+	}
 }
