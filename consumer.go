@@ -156,7 +156,15 @@ func (c *Consumer) Close() error {
 
 func (c *Consumer) startSpan(msg *kafka.Message, lowCardinalityAttrs []attribute.KeyValue, highCardinalityAttrs []attribute.KeyValue) (context.Context, trace.Span) {
 	carrier := NewMessageCarrier(msg)
-	parentSpanContext := c.cfg.Propagators.Extract(context.Background(), carrier)
+
+	var ctx context.Context
+	if c.cfg.contextProviderFunc == nil {
+		ctx = context.Background()
+	} else {
+		ctx = *c.cfg.contextProviderFunc()
+	}
+
+	parentSpanContext := c.cfg.Propagators.Extract(ctx, carrier)
 
 	if c.cfg.attributeInjectFunc != nil {
 		highCardinalityAttrs = append(highCardinalityAttrs, c.cfg.attributeInjectFunc(msg)...)

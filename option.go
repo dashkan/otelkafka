@@ -1,6 +1,7 @@
 package otelkafka
 
 import (
+	"context"
 	"net"
 	"strings"
 
@@ -24,6 +25,7 @@ type config struct {
 	bootstrapServers string
 
 	attributeInjectFunc func(msg *kafka.Message) []attribute.KeyValue
+	contextProviderFunc func() *context.Context
 }
 
 // newConfig returns a config with all Options set.
@@ -88,6 +90,12 @@ func WithPropagators(propagators propagation.TextMapPropagator) Option {
 func WithCustomAttributeInjector(fn func(msg *kafka.Message) []attribute.KeyValue) Option {
 	return optionFunc(func(cfg *config) {
 		cfg.attributeInjectFunc = fn
+	})
+}
+
+func WithContextProvider(fn func() *context.Context) Option {
+	return optionFunc(func(cfg *config) {
+		cfg.contextProviderFunc = fn
 	})
 }
 
